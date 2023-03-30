@@ -80,7 +80,7 @@ def StartVirtualMachine(VMid):
 
     x = requests.post(url, cookies=cookies, headers=headers, allow_redirects=True, verify=False)
 
-    print(x.text)
+    #print(x.text)
 
 def StopVirtualMachine(VMid):
     jsonResponse = ProxmoxToken()
@@ -95,7 +95,7 @@ def StopVirtualMachine(VMid):
 
     x = requests.post(url, cookies=cookies, headers=headers, allow_redirects=True, verify=False)
 
-    print(x.text)
+    #print(x.text)
 
 def InfoVirtualMachine(VMid):
     jsonResponse = ProxmoxToken()
@@ -108,3 +108,5 @@ def InfoVirtualMachine(VMid):
     headers = {'CSRFPreventionToken': CSRFPreventionToken}
 
     x = requests.post(url, cookies=cookies, headers=headers, allow_redirects=True, verify=False)
+    
+    #print(x.text)

@@ -11,5 +11,3 @@ Proxmox: The bulk of this class is for generating CSRFPreventionToken and making
 
 ProxmoxDiscordBot: Main class
 
-
-Full video on how to create a Proxmox user, a Discord bot, getting the code working, as well as a finished showcase is coming soon at https://www.youtube.com/channel/UC1TIAQaEQojkFztW0zOejpg

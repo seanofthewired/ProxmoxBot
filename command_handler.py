@@ -73,7 +73,7 @@ class CommandHandler:
         for command_name, command_func in self.command_functions.items():
             signature = inspect.signature(command_func)
             params = list(signature.parameters.values())[1:]  # Exclude 'self' parameter
-            command = f"{command_name} <node_name> {' '.join([f'<{param.name}>' for param in params])}"
+            command = f"{command_name} {' '.join([f'<{param.name}>' for param in params])}"
             description = command_func.__description__  # Use function description
             self.commands.append({"command": command, "description": description})
             logging.info(f"Registered command: {command}")

@@ -77,3 +77,38 @@ def create_snapshot(proxmox, node_name: str, vm_id: str, snapshot_name: str) -> 
         return f"Snapshot '{snapshot_name}' created for VM '{vm_id}'."
     except Exception as e:
         return f"Failed to create snapshot: {str(e)}"
+
+@command("Lists all snapshots for a VM", requires_vm_id=True)
+def list_snapshots(proxmox, node_name: str, vm_id: str) -> str:
+    logging.info(f"Listing snapshots for VM ID: {vm_id}")
+    try:
+        snapshots = proxmox.nodes(node_name).qemu(vm_id).snapshot.get()
+        if snapshots:
+            snapshots_info = "\n".join([f"- {snapshot['name']}" for snapshot in snapshots])
+            return f"Snapshots for VM {vm_id}:\n{snapshots_info}"
+        else:
+            return f"No snapshots found for VM {vm_id}."
+    except Exception as e:
+        return f"Failed to list snapshots: {str(e)}"
+
+@command("Reboots a VM if it is currently running", requires_vm_id=True)
+def reboot(proxmox, node_name: str, vm_id: str) -> str:
+    logging.info(f"Executing 'reboot' command with node name: {node_name}, VM ID: {vm_id}")
+    try:
+        proxmox.nodes(node_name).qemu(vm_id).status.reboot.post()
+        return f"Rebooting VM {vm_id} on node {node_name}."
+    except Exception as e:
+        return f"Failed to reboot VM: {str(e)}"
+
+@command("Deletes a VM after explicit confirmation using '--confirmed' parameter", requires_vm_id=True)
+def delete_vm(proxmox, node_name: str, vm_id: str, confirmed: str = "") -> str:
+    if confirmed != "--confirmed":
+        return (f"WARNING: You are about to delete VM {vm_id} on node {node_name}. "
+                "This action is irreversible. To confirm, repeat the command with '--confirmed' at the end.")
+
+    logging.info(f"Executing 'delete_vm' command with explicit confirmation for VM ID: {vm_id}")
+    try:
+        proxmox.nodes(node_name).qemu(vm_id).delete()
+        return f"VM {vm_id} has been successfully deleted from node {node_name}."
+    except Exception as e:
+        return f"Failed to delete VM: {str(e)}"

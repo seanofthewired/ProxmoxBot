@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  proxmoxbot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - .:/app

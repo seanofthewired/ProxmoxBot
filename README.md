@@ -1,13 +1,17 @@
-# ProxmoxBot
-Python code that utilizes a Discord bot to read and reply in an assigned text channel. Different prompts will send different API request to a Proxmox server to control Virtual Machines
+```
+Proxmox VM Manager Bot: A Discord bot for managing Proxmox virtual machines.
+Copyright (C) 2024  Brian J. Royer
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-Responses: This is the logic for how the bot should call the Proxmox class based on what the user typed in a text channel.
-
-DiscordBot: Constructor for the Discord bot. 
-
-Proxmox: The bulk of this class is for generating CSRFPreventionToken and making API calls to the Proxmox server. 
-
-ProxmoxDiscordBot: Main class
-
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+```

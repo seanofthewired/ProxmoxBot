@@ -40,25 +40,26 @@ class CommandHandler:
                 logging.info(f"Registering command: {command_group} {command_name}")
                 self.register_command(command_group, command_name, obj)
 
-
     def generate_commands(self) -> None:
         """
         Generate commands array based on registered command functions.
         """
-        self.commands.clear()  # Clear existing commands
+        self.commands.clear()
         logging.info("Generating commands...")
         for group, commands in self.command_functions.items():
             for command_name, command_func in commands.items():
                 try:
                     signature = inspect.signature(command_func)
-                    params = list(signature.parameters.values())[2:]  # Exclude 'self' and 'proxmox' parameters
-                    command_format = f"{group} {command_name} {' '.join([f'<{param.name}>' for param in params])}"
-                    description = command_func.__description__  # Use function description
+                    params = [p for p in signature.parameters.values() if p.name != 'proxmox']  # Exclude 'proxmox' parameter
+                    # Exclude 'default' group name from the command format
+                    command_format = f"{command_name} {' '.join([f'<{param.name}>' for param in params])}" if group == 'default' else f"{group} {command_name} {' '.join([f'<{param.name}>' for param in params])}"
+                    description = command_func.__description__
                     self.commands.append({"command": command_format, "description": description})
                     logging.info(f"Registered command: {command_format}")
                 except Exception as e:
                     logging.error(f"Error generating command for {group} {command_name}: {e}")
         logging.info("Commands generated successfully.")
+
 
     def register_command(self, command_group: str, command_name: str, func: Callable) -> None:
         """
@@ -82,29 +83,40 @@ class CommandHandler:
         logging.info(f"Command '{command_name}' registered under group '{command_group}'")
 
     def generate_help_message(self, command_group=None):
-        global_node_set = SessionConfig.get_node() is not None
+        """
+        Generate a help message for all commands, or just for the specified command group.
+        """
         all_groups_info = []
 
         for group, commands in self.command_functions.items():
-            if group == 'default':
-                group_name = ''
-            else:
-                group_name = f"{group} "  # Capitalize group name and add a space
-                
+            # Skip other groups if a specific command group is requested
+            if command_group and group != command_group:
+                continue
+
             group_commands_info = []
             for cmd, cmd_func in commands.items():
-                params = getattr(cmd_func, '__params__', [])
-                if global_node_set and 'node_name' in params:
-                    params = [param for param in params if param != 'node_name']
-                command_format = f"{group_name}{cmd} {' '.join([f'<{param}>' for param in params])}"
+                # Retrieve function parameters, excluding 'proxmox'
+                func_params = getattr(cmd_func, '__params__', {})
+                # Include parameter names, conditionally excluding 'node_name' if SessionConfig is set
+                param_names = [param.name for param in func_params.values() if param.name != 'proxmox']
+                if SessionConfig.get_node() is not None and 'node_name' in param_names:
+                    param_names.remove('node_name')  # Exclude 'node_name' if session node is set
+
+                # Format the command string
+                command_format = cmd
+                if group != 'default':
+                    command_format = f"{group} {command_format}"  # Prefix with group if not 'default'
+                if param_names:
+                    command_format += ' ' + ' '.join([f'<{param}>' for param in param_names])
                 description = getattr(cmd_func, '__description__', 'No description available.')
                 group_commands_info.append({"command": command_format.strip(), "description": description})
 
-            formatted_group_commands = commands_to_markdown(group_commands_info)
-            all_groups_info.append(formatted_group_commands)
+            if group_commands_info:
+                formatted_group_commands = commands_to_markdown(group_commands_info)
+                all_groups_info.append(formatted_group_commands)
 
-        return "\n".join(all_groups_info)
-
+        return "\n".join(all_groups_info) if all_groups_info else "No commands found for this group."
+    
     def parse_command(self, parts):
         """
         Parses the command string to identify the command group, command, and arguments.
@@ -165,18 +177,8 @@ class CommandHandler:
             logging.info(f"Found command function: {command_function}")
 
             try:
-                kwargs = {}
-                if hasattr(command_function, 'requires_node_name') and command_function.requires_node_name:
-                    if user_args:
-                        # Explicitly move 'node_name' from user_args to kwargs
-                        kwargs['node_name'] = user_args.pop(0)
-                        logging.info(f"'node_name' set to kwargs: {kwargs['node_name']}")
-                    else:
-                        logging.error("Node name is required but not provided.")
-                        return "Node name is required."
-
-                logging.info(f"Final arguments for command function: User Args - {user_args}, Kwargs - {kwargs}")
-                result = command_function(*user_args, **kwargs)
+                logging.info(f"Final arguments for command function: User Args - {user_args}")
+                result = command_function(*user_args)
                 logging.info(f"Command function executed successfully. Result: {result}")
                 return result
             except TypeError as e:

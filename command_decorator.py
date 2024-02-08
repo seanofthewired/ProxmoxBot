@@ -1,74 +1,81 @@
-import functools
 import inspect
+import functools
 import logging
 from proxmox import get_proxmox_api, resolve_vm_identifier
 from session_config import SessionConfig
 
-logging.basicConfig(level=logging.INFO)
+def command(description: str):
+    """
+    `command` decorator: Facilitates the development of command interfaces in Proxmox environments by
+    automatically managing command parameters, streamlining error handling, and optimizing command
+    categorization based on function signatures.
 
-def command(description: str, requires_vm_id=True, requires_node_name=False):
+    Features:
+    1. **Command Grouping**: Extracts command groups from function names for logical organization.
+    2. **API & Node Name Injection**: Dynamically injects Proxmox API objects and node names into functions,
+    driven by session configuration and signature introspection, eliminating manual parameter specification.
+    3. **Parameter Inference**: Leverages signature introspection to infer command parameters, including
+    conditional handling of `node_name` and VM ID resolution, tailored to session context.
+    4. **Adaptive Execution Logic**: Implements logic branches based on session node configuration, optimizing
+    command syntax and execution pathways.
+    5. **Syntax Optimization**: Automatically adjusts command parameter requirements and documentation based
+    on session settings, minimizing user input complexity.
+    6. **Error Handling & Feedback**: Integrates error detection and user feedback mechanisms, enhancing
+    troubleshooting and user interaction.
+    7. **Dynamic Argument Checks**: Performs runtime argument validation, ensuring command integrity and providing
+    informative feedback on missing inputs.
+
+    Usage is centered around enhancing function definitions within Proxmox-based command utilities, streamlining
+    the creation and maintenance of a coherent, user-friendly command layer.
+    """
     def decorator(func):
         func.__description__ = description
         func_name_parts = func.__name__.split('_', 1)
-        func.__group__ = func_name_parts[0] if len(func_name_parts) > 1 and func_name_parts[0] != 'default' else ''
+        func.__group__ = func_name_parts[0] if len(func_name_parts) > 1 else 'default'
         func.__command__ = func_name_parts[-1]
-        func.__params__ = list(inspect.signature(func).parameters.keys())[1:]  # Exclude 'self' parameter
+        func.__params__ = inspect.signature(func).parameters
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            proxmox = get_proxmox_api()
-            if proxmox is None:
+            proxmox_api = get_proxmox_api()
+            if proxmox_api is None:
                 logging.error("Failed to connect to Proxmox API.")
-                return "Failed to connect to Proxmox."
+                return "🔴 Failed to connect to Proxmox API."
 
-            # Check if the function signature includes 'node_name' and handle it
-            sig = inspect.signature(func)
-            if 'vm_id' in sig.parameters:
-                if 'vm_id' not in kwargs:
-                    if args:
-                        kwargs['vm_id'] = args[0]
-                        args = args[1:]
+            session_node = SessionConfig.get_node()
+            func_params = inspect.signature(func).parameters
+            call_args = [proxmox_api]
+
+            node_name_in_args = 'node_name' in func_params and 'node_name' in kwargs
+            if 'node_name' in func_params and not node_name_in_args:
+                if session_node:
+                    call_args.append(session_node)
+                elif args:
+                    call_args.append(args[0])
+                    args = args[1:]
+
+            if 'vm_id' in func_params and args:
+                node_name = call_args[1] if len(call_args) > 1 else None
+                vm_id = args[0] if not node_name_in_args else kwargs.get('vm_id')
+
+                if vm_id is not None:
+                    resolved_vm_id = resolve_vm_identifier(node_name, vm_id)
+                    if resolved_vm_id is None:
+                        return f"🔴 Could not resolve VM identifier: {vm_id}"
+
+                    if node_name_in_args:
+                        kwargs['vm_id'] = resolved_vm_id
                     else:
-                        logging.error("VM ID is required but not provided.")
-                        return "VM ID is required."
-            if 'node_name' in sig.parameters:
-                if 'node_name' not in kwargs:
-                    if args:
-                        kwargs['node_name'] = args[0]
-                        args = args[1:]
-                    else:
-                        # Attempt to use a default node_name from the session config if available
-                        default_node_name = SessionConfig.get_node()
-                        if default_node_name:
-                            kwargs['node_name'] = default_node_name
-                        else:
-                            logging.error("Node name is required but not provided.")
-                            return "Node name is required."
+                        args = (resolved_vm_id,) + args[1:]
 
-            # Ensure 'proxmox' is included for functions that require it
-            if 'proxmox' in sig.parameters:
-                kwargs['proxmox'] = proxmox
-
-            # Add any missing parameters to the kwargs
-            for param in sig.parameters:
-                if param not in kwargs:
-                    kwargs[param] = None
-
-            # Append the remaining args to positional arguments
-            logging.info(f"Executing {func.__name__} with adjusted args and kwargs.")
             try:
-                return func(**kwargs)
+                bound_args = inspect.signature(func).bind(*call_args, *args, **kwargs)
+                bound_args.apply_defaults()
+                return func(*bound_args.args, **bound_args.kwargs)
             except TypeError as e:
-                logging.error(f"TypeError when executing {func.__name__}: {e}")
-                raise
+                return f"🔴 TypeError in {func.__name__}: {str(e)}."
+            except Exception as e:
+                return f"🔴 Error processing your request in {func.__name__}: {str(e)}"
 
         return wrapper
-
     return decorator
-
-def update_wrapper_metadata(func, wrapper):
-    wrapper.__description__ = getattr(func, '__description__', 'No description available.')
-    wrapper.__command__ = getattr(func, '__command__', 'unknown')
-    wrapper.__group__ = getattr(func, '__group__', 'default')
-    wrapper.__params__ = getattr(func, '__params__', [])
-    return wrapper

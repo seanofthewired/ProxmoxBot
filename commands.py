@@ -4,13 +4,10 @@ from transformers import bytes_to_gb
 from transformers import vm_info_to_markdown, servers_list_to_markdown, status_to_markdown
 from session_config import SessionConfig
 
-@command("Lists all servers in a node", requires_vm_id=False, requires_node_name=True)
-def servers(proxmox, node_name: str, **kwargs):
-    if node_name is None:
-        node_name = SessionConfig.get_node()
-        if node_name is None:
-            return "Node name is required."
+logging.basicConfig(level=logging.INFO)
 
+@command("Lists all servers in a node")
+def servers(proxmox, node_name: str):
     logging.info(f"Executing 'servers' command with node name: {node_name}")
     vms = proxmox.nodes(node_name).qemu.get()
     servers_info = []
@@ -30,18 +27,21 @@ def servers(proxmox, node_name: str, **kwargs):
                 "ram_usage": ram_usage,
                 "max_ram": max_ram
             })
+
+            servers_info.sort(key=lambda x: x['vm_id'])
+
         except KeyError as e:
             logging.error(f"Error processing VM data: {e}")
             return "An error occurred while processing VM data."
 
     return servers_list_to_markdown(servers_info)
 
-@command("Sets the current node name for the session", requires_vm_id=False)
+@command("Sets the current node name for the session")
 def session_set_node(proxmox, node_name: str) -> str:
     SessionConfig.set_node(node_name)
     return f"Current node set to {node_name}."
 
-@command("Get the current node name for the session", requires_vm_id=False)
+@command("Get the current node name for the session")
 def session_get_node(proxmox) -> str:
     node_name = SessionConfig.get_node()
     return f"Current node set to {node_name}."
@@ -68,6 +68,7 @@ def vm_status(proxmox, node_name: str, vm_id: str) -> str:
 def vm_info(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Executing 'info' command with node name: {node_name}, VM ID: {vm_id}")
     vm_info = proxmox.nodes(node_name).qemu(vm_id).config.get()
+    vm_info = {k: vm_info[k] for k in sorted(vm_info)}
     return vm_info_to_markdown(vm_info)
 
 @command("Creates a snapshot for a VM")

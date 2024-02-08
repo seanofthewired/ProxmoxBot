@@ -3,7 +3,6 @@ import discord
 import logging
 from command_handler import handler
 
-# Set up basic logging
 logging.basicConfig(level=logging.INFO)
 
 async def send_message(message: discord.Message, user_message: str, is_private: bool) -> None:
@@ -15,14 +14,16 @@ async def send_message(message: discord.Message, user_message: str, is_private: 
     :param is_private: Flag indicating if the message should be private.
     """
     try:
-        logging.info(f"Preparing to send a message. Private: {is_private}, User Message: {user_message}")
+        logging.info(f"Preparing to send a message. Private: {is_private}")
         response = handler.respond(user_message)
-        if is_private:
-            await message.author.send(response)
-            logging.info("Sent a private message.")
+        if isinstance(response, discord.Embed):
+            send_func = message.author.send if is_private else message.channel.send
+            await send_func(embed=response)
         else:
-            await message.channel.send(response)
-            logging.info("Sent a public message.")
+            text_response = response if isinstance(response, str) else "An error occurred."
+            send_func = message.author.send if is_private else message.channel.send
+            await send_func(text_response)
+        logging.info("Message sent.")
     except Exception as e:
         logging.error(f"Error sending message: {e}", exc_info=True)
 

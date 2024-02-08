@@ -14,20 +14,26 @@ def bytes_to_gb(bytes_val: int) -> float:
 
 def vm_info_to_markdown(vm_info: dict) -> str:
     max_key_length = max(len(key) for key in vm_info.keys())
-    formatted_string = "```\n"
+    formatted_string = "```markdown\n"
     for key, value in vm_info.items():
         formatted_value = str(value).replace('\n', ' ')
-        formatted_string += f"{key:<{max_key_length}} : {formatted_value}\n"
+        formatted_string += f"[{key:<{max_key_length}}]:\t{formatted_value}\n"
     formatted_string += "```"
     return formatted_string
 
 def servers_list_to_markdown(servers_info: list) -> str:
-    formatted_string = "```\nVM Name          VM ID    Status      RAM Usage\n"
-    formatted_string += "-" * 60 + "\n"
+    max_name_length = max(len(server['name']) for server in servers_info) + 2
+    max_id_length = max(len(str(server['vm_id'])) for server in servers_info) + 2
+
+    formatted_string = "```markdown\n"
+    formatted_string += f"On \t{'Name':{max_name_length}}\t{'ID':{max_id_length}}\tRAM\n"
+    formatted_string += "-" * (max_name_length + max_id_length + 35) + "\n"
+
     for server in servers_info:
-        # Assuming server is a dict with necessary keys
-        ram_usage = f"{server['ram_usage']}GB / {server['max_ram']}GB"
-        formatted_string += f"{server['name']:<15} {server['vm_id']:<8} {server['status']:<10} {ram_usage}\n"
+        status = "🟢 " if server['status'].lower() == "running" else "🔴 "
+        ram_usage = f"{server['ram_usage']:.2f} GB / {server['max_ram']:.2f} GB"
+        formatted_string += f"{status}\t{server['name']:{max_name_length}}\t{str(server['vm_id']):{max_id_length}}\t{ram_usage}\n"
+
     formatted_string += "```"
     return formatted_string
 

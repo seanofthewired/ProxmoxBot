@@ -1,76 +1,77 @@
-'''
-Proxmox VM Manager Bot: A Discord bot for managing Proxmox virtual machines.
-Copyright (C) 2024  Brian J. Royer
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Contact me at: brian.royer@gmail.com or https://github.com/shyce
-'''
-
 import logging
 from command_decorator import command
 from transformers import bytes_to_gb
 from transformers import vm_info_to_markdown, servers_list_to_markdown, status_to_markdown
+from session_config import SessionConfig
 
-@command("Lists all servers in a node", requires_vm_id=False)
-def servers(proxmox, node_name: str) -> str:
+@command("Lists all servers in a node", requires_vm_id=False, requires_node_name=True)
+def servers(proxmox, node_name: str, **kwargs):
+    if node_name is None:
+        node_name = SessionConfig.get_node()
+        if node_name is None:
+            return "Node name is required."
+
     logging.info(f"Executing 'servers' command with node name: {node_name}")
     vms = proxmox.nodes(node_name).qemu.get()
     servers_info = []
     for vm in vms:
-        vm_name = vm['name']
-        vm_id = vm['vmid']
-        vm_status = proxmox.nodes(node_name).qemu(vm_id).status.current.get()
-        ram_usage = vm_status.get("mem", -1)
-        max_ram = vm_status.get("maxmem", -1)
-        ram_usage = bytes_to_gb(ram_usage) if ram_usage != -1 else "Error retrieving information"
-        max_ram = bytes_to_gb(max_ram) if max_ram != -1 else "Error retrieving information"
-        servers_info.append({
-            "name": vm_name,
-            "vm_id": vm_id,
-            "status": vm_status["qmpstatus"],
-            "ram_usage": ram_usage,
-            "max_ram": max_ram
-        })
+        try:
+            vm_name = vm.get('name', 'Unknown')
+            vm_id = vm.get('vmid', 'Unknown')
+            vm_status = proxmox.nodes(node_name).qemu(vm_id).status.current.get()
+            ram_usage = vm_status.get("mem", -1)
+            max_ram = vm_status.get("maxmem", -1)
+            ram_usage = bytes_to_gb(ram_usage) if ram_usage != -1 else "Error retrieving information"
+            max_ram = bytes_to_gb(max_ram) if max_ram != -1 else "Error retrieving information"
+            servers_info.append({
+                "name": vm_name,
+                "vm_id": vm_id,
+                "status": vm_status.get("qmpstatus", "Unknown"),
+                "ram_usage": ram_usage,
+                "max_ram": max_ram
+            })
+        except KeyError as e:
+            logging.error(f"Error processing VM data: {e}")
+            return "An error occurred while processing VM data."
+
     return servers_list_to_markdown(servers_info)
 
-@command("Starts a VM if not already running", requires_vm_id=True)
-def start(proxmox, node_name: str, vm_id: str) -> str:
+@command("Sets the current node name for the session", requires_vm_id=False)
+def session_set_node(proxmox, node_name: str) -> str:
+    SessionConfig.set_node(node_name)
+    return f"Current node set to {node_name}."
+
+@command("Get the current node name for the session", requires_vm_id=False)
+def session_get_node(proxmox) -> str:
+    node_name = SessionConfig.get_node()
+    return f"Current node set to {node_name}."
+
+@command("Starts a VM if not already running")
+def vm_start(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Executing 'start' command with node name: {node_name}, VM ID: {vm_id}")
     proxmox.nodes(node_name).qemu(vm_id).status.start.post()
     return f"Attempting to start VM {vm_id} on node {node_name}."
 
-@command("Stops a VM if it is currently running", requires_vm_id=True)
-def stop(proxmox, node_name: str, vm_id: str) -> str:
+@command("Stops a VM if it is currently running")
+def vm_stop(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Executing 'stop' command with node name: {node_name}, VM ID: {vm_id}")
     proxmox.nodes(node_name).qemu(vm_id).status.stop.post()
     return f"Attempting to stop VM {vm_id} on node {node_name}."
 
-@command("Shows the current status of a VM", requires_vm_id=True)
-def status(proxmox, node_name: str, vm_id: str) -> str:
+@command("Shows the current status of a VM")
+def vm_status(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Executing 'status' command with node name: {node_name}, VM ID: {vm_id}")
     vm_status = proxmox.nodes(node_name).qemu(vm_id).status.current.get()['status']
     return status_to_markdown(vm_status, vm_id)
 
-@command("Shows the current config of a VM", requires_vm_id=True)
-def info(proxmox, node_name: str, vm_id: str) -> str:
+@command("Shows the current config of a VM")
+def vm_info(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Executing 'info' command with node name: {node_name}, VM ID: {vm_id}")
     vm_info = proxmox.nodes(node_name).qemu(vm_id).config.get()
     return vm_info_to_markdown(vm_info)
 
-@command("Creates a snapshot for a VM", requires_vm_id=True)
-def create_snapshot(proxmox, node_name: str, vm_id: str, snapshot_name: str) -> str:
+@command("Creates a snapshot for a VM")
+def snap_create(proxmox, node_name: str, vm_id: str, snapshot_name: str) -> str:
     logging.info(f"Creating snapshot '{snapshot_name}' for VM '{vm_id}' on node '{node_name}'")
     try:
         proxmox.nodes(node_name).qemu(vm_id).snapshot.create(snapname=snapshot_name)
@@ -78,8 +79,8 @@ def create_snapshot(proxmox, node_name: str, vm_id: str, snapshot_name: str) -> 
     except Exception as e:
         return f"Failed to create snapshot: {str(e)}"
 
-@command("Lists all snapshots for a VM", requires_vm_id=True)
-def list_snapshots(proxmox, node_name: str, vm_id: str) -> str:
+@command("Lists all snapshots for a VM")
+def snap_list(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Listing snapshots for VM ID: {vm_id}")
     try:
         snapshots = proxmox.nodes(node_name).qemu(vm_id).snapshot.get()
@@ -90,9 +91,38 @@ def list_snapshots(proxmox, node_name: str, vm_id: str) -> str:
             return f"No snapshots found for VM {vm_id}."
     except Exception as e:
         return f"Failed to list snapshots: {str(e)}"
+    
+@command("Deletes a snapshot for a VM")
+def snap_delete(proxmox, node_name: str, vm_id: str, snapshot_name: str) -> str:
+    logging.info(f"Deleting snapshot '{snapshot_name}' for VM '{vm_id}' on node '{node_name}'")
+    try:
+        proxmox.nodes(node_name).qemu(vm_id).snapshot(snapshot_name).delete()
+        return f"Snapshot '{snapshot_name}' deleted for VM '{vm_id}'."
+    except Exception as e:
+        return f"Failed to delete snapshot: {str(e)}"
 
-@command("Reboots a VM if it is currently running", requires_vm_id=True)
-def reboot(proxmox, node_name: str, vm_id: str) -> str:
+@command("Rollbacks a VM to a specified snapshot")
+def snap_rollback(proxmox, node_name: str, vm_id: str, snapshot_name: str) -> str:
+    logging.info(f"Rolling back VM '{vm_id}' to snapshot '{snapshot_name}' on node '{node_name}'")
+    try:
+        proxmox.nodes(node_name).qemu(vm_id).snapshot(snapshot_name).rollback.post()
+        return f"VM '{vm_id}' rolled back to snapshot '{snapshot_name}'."
+    except Exception as e:
+        return f"Failed to rollback to snapshot: {str(e)}"
+    
+@command("Clones a VM, allowing for full or linked clones")
+def vm_clone(proxmox, node_name: str, vm_id: str, new_vm_id: str, new_vm_name: str, clone_type: str = "linked") -> str:
+    logging.info(f"Cloning VM '{vm_id}' to new VM '{new_vm_id}' on node '{node_name}', Clone type: {clone_type}")
+    full_clone = 1 if clone_type.lower() == "full" else 0
+    try:
+        proxmox.nodes(node_name).qemu(vm_id).clone.create(newid=new_vm_id, name=new_vm_name, full=full_clone)
+        clone_type_msg = "full clone" if full_clone else "linked clone"
+        return f"VM '{vm_id}' cloned to new VM '{new_vm_id}' as a {clone_type_msg} on node '{node_name}'."
+    except Exception as e:
+        return f"Failed to clone VM: {str(e)}"
+
+@command("Reboots a VM if it is currently running")
+def vm_reboot(proxmox, node_name: str, vm_id: str) -> str:
     logging.info(f"Executing 'reboot' command with node name: {node_name}, VM ID: {vm_id}")
     try:
         proxmox.nodes(node_name).qemu(vm_id).status.reboot.post()
@@ -100,8 +130,8 @@ def reboot(proxmox, node_name: str, vm_id: str) -> str:
     except Exception as e:
         return f"Failed to reboot VM: {str(e)}"
 
-@command("Deletes a VM after explicit confirmation using '--confirmed' parameter", requires_vm_id=True)
-def delete_vm(proxmox, node_name: str, vm_id: str, confirmed: str = "") -> str:
+@command("Deletes a VM after explicit confirmation using '--confirmed' parameter")
+def vm_delete(proxmox, node_name: str, vm_id: str, confirmed: str = "") -> str:
     if confirmed != "--confirmed":
         return (f"WARNING: You are about to delete VM {vm_id} on node {node_name}. "
                 "This action is irreversible. To confirm, repeat the command with '--confirmed' at the end.")

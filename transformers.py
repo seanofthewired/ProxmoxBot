@@ -1,24 +1,3 @@
-'''
-Proxmox VM Manager Bot: A Discord bot for managing Proxmox virtual machines.
-Copyright (C) 2024  Brian J. Royer
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Contact me at: brian.royer@gmail.com or https://github.com/shyce
-'''
-
-# Constants
 BYTES_IN_GIB = 1073741824
 
 def bytes_to_gb(bytes_val: int) -> float:
@@ -53,11 +32,12 @@ def servers_list_to_markdown(servers_info: list) -> str:
     return formatted_string
 
 def commands_to_markdown(commands_list: list) -> str:
-    formatted_string = "```\n"
+    formatted_string = "```markdown\n"
     for cmd in commands_list:
         formatted_string += f"{cmd['command']} - {cmd['description']}\n"
     formatted_string += "```"
     return formatted_string
+
 
 def status_to_markdown(status: str, vm_id_or_name: str) -> str:
     return f"```\nVM {vm_id_or_name} is currently {status}.\n```"

@@ -1,3 +1,4 @@
 proxmoxer
 requests
 discord
+watchdog

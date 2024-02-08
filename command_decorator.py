@@ -1,47 +1,74 @@
-'''
-Proxmox VM Manager Bot: A Discord bot for managing Proxmox virtual machines.
-Copyright (C) 2024  Brian J. Royer
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Contact me at: brian.royer@gmail.com or https://github.com/shyce
-'''
-
 import functools
+import inspect
 import logging
 from proxmox import get_proxmox_api, resolve_vm_identifier
+from session_config import SessionConfig
 
-def command(description: str, requires_vm_id=False):
+logging.basicConfig(level=logging.INFO)
+
+def command(description: str, requires_vm_id=True, requires_node_name=False):
     def decorator(func):
-        @functools.wraps(func)
-        def wrapper(node_name: str, vm_id_or_name: str = None, *args, **kwargs):
-            try:
-                proxmox = get_proxmox_api()
-                if proxmox is None:
-                    return "Failed to connect to Proxmox."
+        func.__description__ = description
+        func_name_parts = func.__name__.split('_', 1)
+        func.__group__ = func_name_parts[0] if len(func_name_parts) > 1 and func_name_parts[0] != 'default' else ''
+        func.__command__ = func_name_parts[-1]
+        func.__params__ = list(inspect.signature(func).parameters.keys())[1:]  # Exclude 'self' parameter
 
-                if requires_vm_id:
-                    vm_id = resolve_vm_identifier(node_name, vm_id_or_name)
-                    if not vm_id:
-                        return f"VM {vm_id_or_name} not found on node {node_name}."
-                    return func(proxmox, node_name, vm_id, *args, **kwargs)
-                else:
-                    return func(proxmox, node_name, *args, **kwargs)
-            except Exception as e:
-                logging.error(f"Error in {func.__name__}: {e}")
-                return f"An error occurred: {e}"
-        wrapper.__description__ = description
-        wrapper.__command__ = func.__name__
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            proxmox = get_proxmox_api()
+            if proxmox is None:
+                logging.error("Failed to connect to Proxmox API.")
+                return "Failed to connect to Proxmox."
+
+            # Check if the function signature includes 'node_name' and handle it
+            sig = inspect.signature(func)
+            if 'vm_id' in sig.parameters:
+                if 'vm_id' not in kwargs:
+                    if args:
+                        kwargs['vm_id'] = args[0]
+                        args = args[1:]
+                    else:
+                        logging.error("VM ID is required but not provided.")
+                        return "VM ID is required."
+            if 'node_name' in sig.parameters:
+                if 'node_name' not in kwargs:
+                    if args:
+                        kwargs['node_name'] = args[0]
+                        args = args[1:]
+                    else:
+                        # Attempt to use a default node_name from the session config if available
+                        default_node_name = SessionConfig.get_node()
+                        if default_node_name:
+                            kwargs['node_name'] = default_node_name
+                        else:
+                            logging.error("Node name is required but not provided.")
+                            return "Node name is required."
+
+            # Ensure 'proxmox' is included for functions that require it
+            if 'proxmox' in sig.parameters:
+                kwargs['proxmox'] = proxmox
+
+            # Add any missing parameters to the kwargs
+            for param in sig.parameters:
+                if param not in kwargs:
+                    kwargs[param] = None
+
+            # Append the remaining args to positional arguments
+            logging.info(f"Executing {func.__name__} with adjusted args and kwargs.")
+            try:
+                return func(**kwargs)
+            except TypeError as e:
+                logging.error(f"TypeError when executing {func.__name__}: {e}")
+                raise
+
         return wrapper
+
     return decorator
+
+def update_wrapper_metadata(func, wrapper):
+    wrapper.__description__ = getattr(func, '__description__', 'No description available.')
+    wrapper.__command__ = getattr(func, '__command__', 'unknown')
+    wrapper.__group__ = getattr(func, '__group__', 'default')
+    wrapper.__params__ = getattr(func, '__params__', [])
+    return wrapper

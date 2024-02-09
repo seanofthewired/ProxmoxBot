@@ -44,6 +44,31 @@ def commands_to_markdown(commands_list: list) -> str:
     formatted_string += "```"
     return formatted_string
 
+def disks_list_to_markdown(disks_info: list) -> str:
+    if not disks_info:
+        return "```No disks found.```"
+    
+    max_disk_id_length = max(len(disk['id']) for disk in disks_info) + 2
+    max_size_length = max(len(disk['size']) for disk in disks_info) + 2
+
+    formatted_string = "```markdown\n"
+    formatted_string += f"{'Disk ID':{max_disk_id_length}}\t{'Size':{max_size_length}}\n"
+    formatted_string += "-" * (max_disk_id_length + max_size_length + 5) + "\n"
+
+    for disk in disks_info:
+        formatted_string += f"{disk['id']:{max_disk_id_length}}\t{disk['size']:{max_size_length}}\n"
+
+    formatted_string += "```"
+    return formatted_string
 
 def status_to_markdown(status: str, vm_id_or_name: str) -> str:
     return f"```\nVM {vm_id_or_name} is currently {status}.\n```"
+
+def backups_list_to_markdown(backups_list: list) -> str:
+    formatted_string = "```markdown\n"
+    formatted_string += "Backups:\n"
+    formatted_string += "-" * 20 + "\n"
+    for backup in backups_list:
+        formatted_string += f"Volume: {backup['volume']}, Size: {backup['size']} GB, Filename: {backup['filename']}\n"
+    formatted_string += "```"
+    return formatted_string

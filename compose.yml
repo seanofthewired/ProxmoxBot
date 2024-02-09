@@ -4,5 +4,9 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    volumes:
-      - .:/app
+    working_dir: /app
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./*.py
+          target: /app

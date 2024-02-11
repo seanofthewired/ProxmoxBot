@@ -1,0 +1,7 @@
+proxmoxer
+requests
+discord.py
+urllib3
+pytest
+pytest-cov
+pytest-mock

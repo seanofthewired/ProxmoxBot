@@ -6,22 +6,18 @@ import urllib3
 
 from .command_handler import handler
 
+# Setup logging
 logging.basicConfig(level=logging.ERROR)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-
-async def send_message(
-    message: discord.Message, user_message: str, is_private: bool
-) -> None:
+class MessageSender:
     """
-    Sends a message to a user or channel based on privacy flag, splitting it into multiple messages if longer than 2000 characters,
-    ensuring that code blocks are not improperly split, and avoiding sending empty messages.
-
-    :param message: The Discord message object.
-    :param user_message: The message content to send.
-    :param is_private: Flag indicating if the message should be private.
+    Handles sending messages, abstracting the complexity of dealing with Discord message length limits and splitting logic.
     """
-    try:
+    def __init__(self, client: discord.Client):
+        self.client = client
+
+    async def send_message(self, message: discord.Message, user_message: str, is_private: bool) -> None:
         logging.info(f"Preparing to send a message. Private: {is_private}")
         response = handler.respond(user_message)
 
@@ -30,84 +26,88 @@ async def send_message(
         if isinstance(response, discord.Embed):
             await send_func(embed=response)
         else:
-            text_response = (
-                response if isinstance(response, str) else "An error occurred."
-            )
-            chunks = []
+            await self._send_text_response(send_func, response if isinstance(response, str) else "An error occurred.")
 
-            while text_response:
-                # Limit to 2000 characters, taking care not to split inside code blocks
-                split_point = 1997  # Reserve space for closing code block if needed
-                if len(text_response) > split_point:
-                    # Attempt to avoid splitting inside a code block
-                    last_code_block_end = text_response.rfind(
-                        "```", 0, split_point)
-                    next_code_block_start = text_response.find(
-                        "```", last_code_block_end + 3
-                    )
-                    # If we're starting inside a code block, find the end of it
-                    if (
-                        next_code_block_start != -1
-                        and next_code_block_start < split_point
-                    ):
-                        split_point = next_code_block_start
-                    # Otherwise, try to find a newline to split on
-                    else:
-                        last_newline = text_response.rfind(
-                            "\n", 0, split_point)
-                        if last_newline != -1:
-                            split_point = last_newline + 1
+    async def _send_text_response(self, send_func, text_response: str):
+        chunks = self._split_message(text_response)
+        for chunk in chunks:
+            await send_func(chunk)
 
-                chunk, text_response = (
-                    text_response[:split_point],
-                    text_response[split_point:],
-                )
-                if chunk:  # Ensure we don't attempt to send empty chunks
-                    chunks.append(chunk)
+    def _split_message(self, text_response: str) -> list:
+        max_length = 1997  # Discord's max length minus some space for code block syntax
+        chunks = []
 
-            # Send each chunk as a separate message
-            for chunk in chunks:
-                await send_func(chunk)
+        while text_response:
+            if len(text_response) <= max_length:
+                chunks.append(text_response)
+                break
+            
+            # Find the last best split point which could be a space, newline, or outside a code block
+            split_point = self._find_split_point(text_response, max_length)
 
-        logging.info("Message(s) sent.")
-    except Exception as e:
-        logging.error(f"Error sending message: {e}", exc_info=True)
+            # Append the chunk up to the split point, taking care of closing and reopening code blocks
+            chunks.append(text_response[:split_point])
 
+            # Remove the chunk we just added from the text_response
+            text_response = text_response[split_point:]
 
-def run() -> None:
-    """
-    Initializes and runs the Discord bot.
-    """
-    token = os.getenv("DISCORD_BOT_TOKEN")
-    admin_discord_user_id = os.getenv("ADMIN_DISCORD_USER_ID")
+            # If we're in the middle of a code block, add the closing and opening backticks
+            if '```' in text_response and not text_response.startswith('```'):
+                if not chunks[-1].endswith('```'):
+                    chunks[-1] += '```'  # Close the code block
 
-    if not token or not admin_discord_user_id:
-        logging.error("Token or user ID not found in environment variables.")
-        return
+                # Open a new code block for the remaining text
+                chunks.append('```' + text_response)
+                text_response = ''  # No more text to process
 
-    intents = discord.Intents.default()
-    intents.messages = True
-    intents.message_content = True
+        return chunks
 
-    client = discord.Client(intents=intents)
+    def _find_split_point(self, text: str, max_length: int) -> int:
+        # If there's a code block that starts before max_length and ends after it, move it entirely to the next chunk
+        code_block_start = text.rfind('```', 0, max_length)
+        code_block_end = text.find('```', code_block_start + 3)
 
-    @client.event
-    async def on_ready():
-        logging.info(f"{client.user} has connected to Discord!")
+        if code_block_start != -1 and (code_block_end == -1 or code_block_end > max_length):
+            return code_block_start
 
-    @client.event
-    async def on_message(message: discord.Message):
-        if message.author == client.user:
+        # Otherwise, find the last best general split point, preferring to end on a space or newline
+        split_point = max_length
+        while split_point > 0 and text[split_point] not in ['\n', ' ']:
+            split_point -= 1
+
+        # If we couldn't find a better split, default to max_length
+        return split_point if split_point > 0 else max_length
+
+class Bot:
+    def __init__(self, token: str, admin_id: str):
+        self.token = token
+        self.admin_id = admin_id
+        self.client = discord.Client(intents=self._get_intents())
+        self.message_sender = MessageSender(self.client)
+
+        self.client.event(self.on_ready)
+        self.client.event(self.on_message)
+
+    async def on_ready(self):
+        logging.info(f"{self.client.user} has connected to Discord!")
+
+    async def on_message(self, message: discord.Message):
+        if message.author == self.client.user or message.author.bot:
             return
 
-        if str(
-            message.author.id
-        ) == admin_discord_user_id and message.content.startswith("!"):
+        if str(message.author.id) == self.admin_id and message.content.startswith("!"):
             logging.info(f"Processing admin command: {message.content}")
-            await send_message(message, message.content[1:], is_private=False)
+            await self.message_sender.send_message(message, message.content[1:], is_private=False)
 
-    client.run(token)
+    def _get_intents(self) -> discord.Intents:
+        intents = discord.Intents.default()
+        intents.messages = True
+        intents.message_content = True
+        intents.guilds = True
+        return intents
 
-
-if __name__ == "__main__":
-    run()
+    def run(self):
+        if not self.token or not self.admin_id:
+            logging.error("Token or admin ID not provided.")
+            return
+        self.client.run(self.token)

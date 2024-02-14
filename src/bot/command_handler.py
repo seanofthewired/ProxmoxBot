@@ -39,7 +39,7 @@ class CommandHandler:
                 command_group = getattr(
                     obj, "__group__", "default"
                 )  # Assume 'default' group if not specified
-                logging.info(f"Registering command: {
+                logging.debug(f"Registering command: {
                              command_group} {command_name}")
                 self.register_command(command_group, command_name, obj)
 
@@ -48,7 +48,7 @@ class CommandHandler:
         Generate commands array based on registered command functions.
         """
         self.commands.clear()
-        logging.info("Generating commands...")
+        logging.debug("Generating commands...")
         for group, commands in self.command_functions.items():
             for command_name, command_func in commands.items():
                 try:
@@ -63,17 +63,17 @@ class CommandHandler:
                         if group == "default"
                         else f"{group} {command_name} {' '.join([f'<{param.name}>' for param in params])}"
                     )
-                    description = command_func.__description__
+                    description = getattr(command_func, "__description__", "No description available.")
                     self.commands.append(
                         {"command": command_format, "description": description}
                     )
-                    logging.info(f"Registered command: {command_format}")
+                    logging.debug(f"Registered command: {command_format}")
                 except Exception as e:
                     logging.error(
                         f"Error generating command for {
                             group} {command_name}: {e}"
                     )
-        logging.info("Commands generated successfully.")
+        logging.debug("Commands generated successfully.")
 
     def register_command(
         self, command_group: str, command_name: str, func: Callable
@@ -96,63 +96,37 @@ class CommandHandler:
 
         # Register the command within its group
         self.command_functions[command_group][command_name] = func
-        logging.info(
+        logging.debug(
             f"Command '{command_name}' registered under group '{
                 command_group}'"
         )
 
     def generate_help_message(self, command_group=None):
-        """
-        Generate a help message for all commands, or just for the specified command group.
-        """
         all_groups_info = []
-
         for group, commands in self.command_functions.items():
-            # Skip other groups if a specific command group is requested
             if command_group and group != command_group:
                 continue
-
+            
             group_commands_info = []
             for cmd, cmd_func in commands.items():
-                # Retrieve function parameters, excluding 'proxmox'
-                func_params = getattr(cmd_func, "__params__", {})
-                # Include parameter names, conditionally excluding 'node_name' if SessionConfig is set
-                param_names = [
-                    param.name
-                    for param in func_params.values()
-                    if param.name != "proxmox"
-                ]
-                if SessionConfig.get_node() is not None and "node_name" in param_names:
-                    param_names.remove(
-                        "node_name"
-                    )  # Exclude 'node_name' if session node is set
-
-                # Format the command string
-                command_format = cmd
-                if group != "default":
-                    # Prefix with group if not 'default'
+                func_params = inspect.signature(cmd_func).parameters
+                param_names = [param for param in func_params if param not in ['proxmox', 'node_name']]
+                
+                if 'node_name' in func_params and not SessionConfig.get_node():
+                    param_names.insert(0, 'node_name')  # Add 'node_name' if session node is not set
+                
+                command_format = f"{cmd} {' '.join([f'<{param}>' for param in param_names])}".strip()
+                if group != 'default':
                     command_format = f"{group} {command_format}"
-                if param_names:
-                    command_format += " " + " ".join(
-                        [f"<{param}>" for param in param_names]
-                    )
-                description = getattr(
-                    cmd_func, "__description__", "No description available."
-                )
-                group_commands_info.append(
-                    {"command": command_format.strip(), "description": description}
-                )
-
+                    
+                description = getattr(cmd_func, "__description__", "No description available.")
+                group_commands_info.append({"command": command_format, "description": description})
+            
             if group_commands_info:
-                formatted_group_commands = commands_to_markdown(
-                    group_commands_info)
-                all_groups_info.append(formatted_group_commands)
+                all_groups_info.append(commands_to_markdown(group_commands_info))
 
-        return (
-            "\n".join(all_groups_info)
-            if all_groups_info
-            else "No commands found for this group."
-        )
+        return "\n".join(all_groups_info) if all_groups_info else "No commands found for this group."
+
 
     def parse_command(self, parts):
         """
@@ -164,7 +138,7 @@ class CommandHandler:
         Returns:
             tuple: A tuple containing (command_group, command, args)
         """
-        logging.info(f"Starting to parse command with parts: {parts}")
+        logging.debug(f"Starting to parse command with parts: {parts}")
         # Initialize default command group
         command_group = "default"
 
@@ -173,7 +147,7 @@ class CommandHandler:
             command_group = parts[0].lower()
             command = parts[1]
             args = parts[2:]
-            logging.info(
+            logging.debug(
                 f"Command group specified. Group: {
                     command_group}, Command: {command}, Args: {args}"
             )
@@ -181,7 +155,7 @@ class CommandHandler:
             # First part is a command in the default group
             command = parts[0]
             args = parts[1:]
-            logging.info(f"Default command group. Command: {
+            logging.debug(f"Default command group. Command: {
                          command}, Args: {args}")
         else:
             # Handle case where command might not follow expected structure
@@ -195,7 +169,7 @@ class CommandHandler:
         return command_group, command, args
 
     def respond(self, message: str) -> str:
-        logging.info(f"Received message: {message}")
+        logging.debug(f"Received message: {message}")
         parts = message.strip().split()
 
         if not parts:
@@ -203,18 +177,15 @@ class CommandHandler:
             return "Please provide a command. Type 'help' for a list of commands."
 
         if parts[0].lower() == "help":
-            logging.info("Generating help message.")
+            logging.debug("Generating help message.")
             if len(parts) > 1:
                 command_group = parts[1].lower()
-                if command_group in self.command_functions:
-                    return self.generate_help_message(command_group)
-                else:
-                    return "Unknown command group. Type 'help' for a list of commands."
+                return self.generate_help_message(command_group)
             else:
                 return self.generate_help_message()
 
         command_group, command, user_args = self.parse_command(parts)
-        logging.info(
+        logging.debug(
             f"Parsed command: Command Group - {command_group}, Command - {
                 command}, User Args - {user_args}"
         )
@@ -224,15 +195,15 @@ class CommandHandler:
             and command in self.command_functions[command_group]
         ):
             command_function = self.command_functions[command_group][command]
-            logging.info(f"Found command function: {command_function}")
+            logging.debug(f"Found command function: {command_function}")
 
             try:
-                logging.info(
+                logging.debug(
                     f"Final arguments for command function: User Args - {
                         user_args}"
                 )
                 result = command_function(*user_args)
-                logging.info(
+                logging.debug(
                     f"Command function executed successfully. Result: {result}"
                 )
                 return result

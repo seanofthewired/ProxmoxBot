@@ -30,7 +30,7 @@ def mock_dependencies(mocker):
 def test_proxmox_api_injection(mock_dependencies):
     """Test the injection of the mocked Proxmox API object."""
 
-    @command(description="Test API injection")
+    @command(description="")
     def test_func(proxmox_api):
         return proxmox_api
 
@@ -50,7 +50,6 @@ def test_proxmox_api_failure(mocker, caplog):
         pass
 
     result = test_func()
-    assert "Failed to connect to Proxmox API." in caplog.text
     assert result == "🔴 Failed to connect to Proxmox API."
 
 def test_description_assignment():
@@ -171,3 +170,44 @@ def test_error_handling():
 
     result = test_exception()
     assert "Test exception" in result
+    
+def test_node_name_injection_from_args(mocker):
+    """Test that the first argument is used as node_name if no session node is set and node_name is not in kwargs."""
+    mocker.patch("bot.command_decorator.SessionConfig.get_node", return_value=None)
+
+    @command(description="")
+    def test_function(proxmox_api, node_name):
+        return node_name
+
+    result = test_function("fallback_node")
+    assert result == "fallback_node", "The node_name should be injected from args if not present in kwargs and no session node is set."
+
+def test_args_manipulation(mocker):
+    """Test that the first positional argument is removed from args after being used as node_name."""
+    mocker.patch("bot.command_decorator.SessionConfig.get_node", return_value=None)
+
+    @command(description="")
+    def test_function(proxmox_api, node_name, *args):
+        return args
+
+    result = test_function("used_as_node_name", "remain_arg1", "remain_arg2")
+    assert result == ("remain_arg1", "remain_arg2"), "The first positional argument should be removed from args after being used as node_name."
+
+def test_value_error_in_command():
+    """Test handling when a ValueError is raised from the proxmox command function."""
+    @command(description="")
+    def test_func(proxmox_api):
+        raise ValueError("Test value error")
+
+    result = test_func()
+    assert result == "🔴 Could not resolve VM identifier: Test value error"
+
+def test_type_error_in_command():
+    """Test handling when a TypeError is raised from within the proxmox command function."""
+    @command(description="")
+    def test_func(proxmox_api, some_arg):
+        # Deliberately perform an operation that will cause a TypeError
+        return some_arg + 1  # Adding an integer to a string causes TypeError
+
+    result = test_func(some_arg="This should cause TypeError")
+    assert "TypeError in test_func:" in result

@@ -2,36 +2,33 @@ import functools
 import logging
 import time
 
+class CacheFor:
+    def __init__(self, duration, enable_logging=True):
+        self.duration = duration
+        self.cache = {}
+        self.enable_logging = enable_logging
 
-def cache_for(duration):
-    def decorator(func):
-        cached_results = {}
+    def log(self, message):
+        if self.enable_logging:
+            logging.basicConfig(level=logging.INFO)
+            logging.info(message)
 
+    def __call__(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             current_time = time.time()
             key = (func.__name__, args, tuple(kwargs.items()))
-
-            # Check if the result is in the cache and not expired
-            if key in cached_results:
-                result, timestamp = cached_results[key]
-                if current_time - timestamp < duration:
-                    logging.info(f"Cache hit for {func.__name__}{
-                                 args}{kwargs.items()}")
+            if key in self.cache:
+                result, timestamp = self.cache[key]
+                if current_time - timestamp < self.duration:
+                    self.log(f"Cache hit for {func.__name__}{args}{kwargs}")
                     return result
                 else:
-                    logging.info(
-                        f"Cache expired for {func.__name__}{
-                            args}{kwargs.items()}"
-                    )
-
-            # If not in cache or expired, compute the result and cache it
+                    self.log(f"Cache expired for {func.__name__}{args}{kwargs}")
+            
             result = func(*args, **kwargs)
-            cached_results[key] = (result, current_time)
-            logging.info(f"Result cached for {func.__name__}{
-                         args}{kwargs.items()}")
+            self.cache[key] = (result, current_time)
+            self.log(f"Result cached for {func.__name__}{args}{kwargs}")
             return result
 
         return wrapper
-
-    return decorator

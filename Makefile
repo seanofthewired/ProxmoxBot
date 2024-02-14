@@ -1,8 +1,6 @@
 # Configuration
 PROJECT_NAME = bot
-
-# Specify your docker-compose file if not the default docker-compose.yml
-COMPOSE_FILE = docker-compose.yml
+TEST_PATH = tests/
 
 .PHONY: all clean test coverage report serve-report lint format build up down
 
@@ -19,15 +17,15 @@ clean:
 
 # Run tests using Docker Compose
 test: build
-	docker compose run --rm -v $$(pwd)/src:/app $(PROJECT_NAME) pytest tests/
+	docker compose run --rm -v $$(pwd)/src:/app $(PROJECT_NAME) pytest $(TEST_PATH)
 
 # Generate coverage report using Docker Compose
 coverage: build
-	docker compose run --rm -v $$(pwd)/src:/app $(PROJECT_NAME) pytest --cov=$(PROJECT_NAME) tests/
+	docker compose run --rm -v $$(pwd)/src:/app $(PROJECT_NAME) pytest -vv --cov=$(PROJECT_NAME) $(TEST_PATH)
 
 # Generate HTML coverage report using Docker Compose
 report: build
-	docker compose run --rm -v $$(pwd)/src:/app $(PROJECT_NAME) pytest --cov=$(PROJECT_NAME) --cov-report html tests/
+	docker compose run --rm -v $$(pwd)/src:/app $(PROJECT_NAME) pytest --cov=$(PROJECT_NAME) --cov-report html $(TEST_PATH)
 
 serve-report: report
 	@cd src/htmlcov && python3 -m http.server 8000
@@ -53,3 +51,9 @@ up:
 # Shut down the Docker containers and remove them using Docker Compose
 down:
 	docker compose down
+
+# Shut down the Docker containers and remove them using Docker Compose
+logs:
+	docker compose logs -f
+
+restart: down build up logs

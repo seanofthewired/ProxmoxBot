@@ -1,8 +1,15 @@
 version: '3.8'
 services:
-  proxmoxbot:
+  bot:
     build: .
+    user: ${UID}:${GID}
     restart: unless-stopped
     env_file: .env
+    working_dir: /app
     volumes:
-      - .:/app
+      - ./src:/app
+    develop:
+      watch:
+        - action: sync+restart
+          path: /app
+          target: /app

@@ -1,4 +1,0 @@
-proxmoxer
-requests
-discord
-watchdog

@@ -18,8 +18,16 @@
 
 FROM python:3.12.2-slim
 
+RUN apt-get update && apt-get install -y make \
+    && rm -rf /var/lib/apt/lists/*
+    
 WORKDIR /app
-COPY . /app
+COPY ./src/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install flake8 black isort autopep8 sphinx sphinx-rtd-theme
 
-CMD ["python", "./watchdog.py"]
+COPY ./src /app
+
+# Install development tools
+
+CMD ["python", "main.py"]

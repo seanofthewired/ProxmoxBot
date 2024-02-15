@@ -2,7 +2,7 @@ import logging
 import os
 from bot.main import Bot
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 if __name__ == "__main__":
     token = os.getenv("DISCORD_BOT_TOKEN")

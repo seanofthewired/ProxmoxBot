@@ -343,17 +343,18 @@ def vm_stats(proxmox, node_name: str, vm_id: str) -> str:
     return vm_info_to_markdown(vm_info)
 
 
-@command("Adjusts CPU cores and memory allocation for a VM")
-def vm_adjust_resources(
-    proxmox, node_name: str, vm_id: str, cpu_cores: str, memory_mb: str
-) -> str:
-    proxmox.nodes(node_name).qemu(vm_id).config.put(
-        cores=cpu_cores, memory=int(memory_mb)
-    )
-    return (
-        f"Resources adjusted for VM {vm_id}: {
-            cpu_cores} CPU cores, {memory_mb}MB RAM."
-    )
+# Needs to be fixed:
+# @command("Adjusts CPU cores and memory allocation for a VM")
+# def vm_adjust_resources(
+#     proxmox, node_name: str, vm_id: str, cpu_cores: str, memory_mb: str
+# ) -> str:
+#     proxmox.nodes(node_name).qemu(vm_id).config.put(
+#         cores=cpu_cores, memory=int(memory_mb)
+#     )
+#     return (
+#         f"Resources adjusted for VM {vm_id}: {
+#             cpu_cores} CPU cores, {memory_mb}MB RAM."
+#     )
 
 
 @command("Initiates a backup for a specified VM")

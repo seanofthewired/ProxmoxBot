@@ -30,7 +30,6 @@ class MessageSender:
     async def _send_text_response(self, send_func, text_response: str):
         splitter = DiscordMessageSplitter()
         chunks = splitter.split_message(text_response)
-        print(chunks)
         for chunk in chunks:
             await send_func(chunk)
 

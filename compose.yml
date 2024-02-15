@@ -8,8 +8,3 @@ services:
     working_dir: /app
     volumes:
       - ./src:/app
-    develop:
-      watch:
-        - action: sync+restart
-          path: /app
-          target: /app

@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import patch
 from unittest.mock import MagicMock
 from bot.command_handler import CommandHandler
-from bot.session_config import SessionConfig
 
 @pytest.fixture
 def command_handler():

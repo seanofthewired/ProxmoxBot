@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+markers = [
+    "asyncio: mark a test as an asyncio coroutine.",
+]
+[tool.coverage.run]
+omit = [
+    "bot/commands.py",
+]

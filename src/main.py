@@ -1,5 +1,8 @@
+import logging
 import os
 from bot.main import Bot
+
+logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     token = os.getenv("DISCORD_BOT_TOKEN")

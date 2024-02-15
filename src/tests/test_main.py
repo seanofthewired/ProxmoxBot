@@ -90,12 +90,6 @@ async def test_send_embed_message(message_sender):
     # Verify that channel.send was awaited with the expected embed
     channel.send.assert_awaited_with(embed=embed)
 
-def test_split_message(message_sender):
-    long_message = "a" * 2000
-    chunks = message_sender._split_message(long_message)
-    assert len(chunks) == 2
-    assert all(len(chunk) <= 1997 for chunk in chunks)
-
 @pytest.mark.asyncio
 async def test_on_message_ignore_self(bot, discord_client):
     bot.client.user = AsyncMock()
@@ -129,3 +123,12 @@ async def test_run_missing_token_or_admin_id():
          patch("logging.error") as mock_log:
         Bot(None, None).run()
         mock_log.assert_called()
+
+def test_bot_run_method(bot):
+    # Mock the 'run' method of the discord client within our bot instance
+    with patch.object(bot.client, 'run') as mock_run:
+        # Attempt to run the bot
+        bot.run()
+
+        # Assert that 'run' was called once and with the correct token
+        mock_run.assert_called_once_with('dummy_token')

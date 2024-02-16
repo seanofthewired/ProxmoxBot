@@ -3,6 +3,7 @@
 ## Overview
 
 This document provides comprehensive instructions and insights into setting up and running a Discord bot that integrates with Proxmox Virtual Environment (PVE) for managing VMs and providing system information through Discord commands.
+![Discord Proxmox Bot](https://i.imgur.com/VjCRZEG.png "Discord Proxmox Bot")
 
 ## Prerequisites
 
